@@ -1,0 +1,1220 @@
+{
+  "meta": {
+    "name": "NX Trading \u2014 v2: AI-core re-architecture + cross-asset expansion",
+    "version": 3,
+    "project": "/Users/brandon/code/projects/opencode-ollama-1/nx-trading",
+    "updated": "2026-09-02",
+    "overallStatus": "done",
+    "supersedes": "plan.json (v1 \u2014 all 11 epics done)",
+    "stack": {
+      "framework": "Next.js 16.3.4 (App Router, Turbopack) \u2014 consult node_modules/next/dist/docs/ before framework-level changes",
+      "react": "19.2.8",
+      "css": "Tailwind CSS 4 via @tailwindcss/postcss (CSS vars + @theme inline; NO tailwind.config)",
+      "pm": "pnpm 11.24.0"
+    },
+    "conventions": {
+      "sameAsV1": true,
+      "pageAnatomy": "lib/<feature>.ts (types, seed, pure tick, stats) -> components/<feature>.tsx (stateless presentational) -> app/<route>/layout.tsx (server: metadata + default pass-through) -> app/<route>/page.tsx (client orchestrator)",
+      "hydration": "gate first paint with useMounted() from components/framework.tsx; render <Splash /> until mounted",
+      "determinism": "all randomness via seeded rng (mulberry32 variant); pure tick functions accept state and return next state \u2014 never Math.random() outside an rng",
+      "lint": "npx next lint does NOT exist \u2014 use npx eslint .",
+      "types": "tsc needs .next/types present; order is next build -> tsc -> eslint",
+      "subshell": "use npx next start / npx next build (next not on PATH)"
+    },
+    "validationGate": [
+      "npx next build (new routes listed, static)",
+      "npx tsc --noEmit",
+      "npx eslint .",
+      "npx next start -p <free-port> + curl new routes -> HTTP 200",
+      "flip subtask/story/epic status in this file; EpicStatus + meta.updated per epic"
+    ],
+    "review": {
+      "currentStrengths": [
+        "clean lib->components->app decomposition across all 13 routes",
+        "deterministic seeded data + hydration-safe live ticking",
+        "consistent dark design system + UI kit",
+        "full static build, zero lint/type issues"
+      ],
+      "aiCentricGaps": [
+        "lib/agent.ts streams pre-written prose (pick of static strings) \u2014 the 'AI' narrates nothing it computes",
+        "signals attach a random engine label + canned reason \u2014 no score computed from live data",
+        "no model identity: no versions, no drift, no champion/challenger, no per-model P&L",
+        "no explainability: reasons are copy, not feature attributions",
+        "no governance: kill-switch, confidence bands, and override audit are decorative at best",
+        "performance attribution is strategy/symbol/factor \u2014 never the model"
+      ],
+      "realismGaps": [
+        "one fake clock, no market sessions, no holidays, no RTH/half-day, no FX 24h / futures 23h reality",
+        "every ticker is an independent random walk \u2014 no correlation structure or shared regime state",
+        "no macro events: FOMC/CPI/NFP exist only as flavor strings in agent prose",
+        "orders always fill instantly at mid, no spread/slippage/latency/queue, never rejected",
+        "no money model: margin, buying power, interest, per-venue/per-instrument fees, reconciliation all missing",
+        "instruments are only spot crypto + 4 equities \u2014 no options, futures, treasuries, FX, international",
+        "venue set is 3 crypto venues + implicit Alpaca \u2014 no equity/futures broker (Interactive Brokers), no capability matrix",
+        "no strategy lifecycle: no paper->live gate, no sizing/stop/risk params tied to go-live, no walk-forward"
+      ],
+      "opportunityGaps": [
+        "options module: chains, greeks, IV skew, strategy templates (vertical/straddle/iron condor), max pain + GEX",
+        "futures: contract ladders, open interest, rolls, tick value, margin per contract",
+        "treasuries: yield curve, duration/DV01, 2s10s spread, duration ladder",
+        "FX majors: DXY, carry, 24h sessions vs equity RTH contrast",
+        "international: ADR vs local split, local-session badges, emerging ETFs",
+        "Interactive Brokers as unified broker: netting, buying power, rate, FLEX-style reconciliation, cross-asset capability matrix vs crypto venues",
+        "OMS realism: BRK/OCO/iceberg, amendment/cancel/reject with reasons, queue position, partial fills, execution reports",
+        "AI brain: model registry, champion/challenger A/B, drift, promote/pause, explain panel, per-signal feature attribution, model-attributed P&L"
+      ],
+      "strategy": "Turn AI from narration into a score that is computed from tick data (lib/brain.ts). Build a shared realistic market core (sessions, correlation, macro events, microstructure) that all asset classes tick against. Then bolt the instrument extensions on. End with OMS realism and the strategy lifecycle so AI decisions survive contact with friction."
+    },
+    "howToUpdate": "flip subtask/story/epic status as work lands (todo -> in-progress -> done); set epicStatus when all stories done; bump meta.updated per epic; overallStatus = done when final validation gate passes across all routes (v1 + v2)"
+  },
+  "epicStatus": {
+    "V1-market-core": "done",
+    "V2-options": "done",
+    "V3-futures-rates": "done",
+    "V4-fx-intl": "done",
+    "V5-brokers": "done",
+    "V6-ai-brain": "done",
+    "V7-reality": "done",
+    "V8-oms": "done",
+    "V9-lifecycle": "done",
+    "V10-polish": "done"
+  },
+  "epics": [
+    {
+      "id": "V1-market-core",
+      "title": "Cross-asset market data core (universe, sessions, correlation, regime)",
+      "route": "lib (internal)",
+      "nav": {
+        "group": "n/a",
+        "label": "n/a"
+      },
+      "summary": "Replace lib/market.ts's independent random walks with a single correlated, regime-aware, session-aware market core that every instrument class ticks against. This is the foundation; nothing else in v2 looks 'realistic' without it.",
+      "dependsOn": [
+        "v1 complete"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V1-S1",
+          "title": "Instrument universe + taxonomy",
+          "status": "done",
+          "files": [
+            "lib/market.ts",
+            "lib/instruments.ts (new)"
+          ],
+          "subtasks": [
+            {
+              "id": "V1-S1-T1",
+              "text": "InstrumentType = 'spot'|'future'|'option'|'treasury'|'fx'|'etf'; InstrumentMeta { symbol, type, venue(s), tickSize, contracts?, expiry?, multiplier?, session }",
+              "status": "done"
+            },
+            {
+              "id": "V1-S1-T2",
+              "text": "seedUniverse(): keep v1 7 crypto+equity, add ES/NQ/ZB/ZN/ZF futures, TLH+SPX spot, 5 FX majors, ~10 international/ADR, ~12 optionable underlyings",
+              "status": "done"
+            },
+            {
+              "id": "V1-S1-T3",
+              "text": "per-instrument tick cadence + price path params (vol, drift) by type; futures quoted in ticks with tick value, treasuries in yield (not price)",
+              "status": "done"
+            },
+            {
+              "id": "V1-S1-T4",
+              "text": "acceptance: tsc clean; universe pure + deterministic given seed; no Math.random() outside rng",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "strict tsc clean; seeded deterministic; pure tickers"
+          ]
+        },
+        {
+          "id": "V1-S2",
+          "title": "Shared regime + correlated random state",
+          "status": "done",
+          "files": [
+            "lib/market.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "V1-S2-T1",
+              "text": "regime = { volState: 'calm'|'chop'|'riskoff', trend: -1|0|+1, driver: string }; tick regime rarely, persist to state so UI can surface it",
+              "status": "done"
+            },
+            {
+              "id": "V1-S2-T2",
+              "text": "one shared shock = rng()*regime.vol; each instrument = shock*beta(type) + idiosyncratic; riskoff pushes equities/futures down, treasuries up, gold up, crypto most",
+              "status": "done"
+            },
+            {
+              "id": "V1-S2-T3",
+              "text": "expose correlation matrix (5x5 asset-class) as data for UI heat panels; riskoff makes es/btc/nvda move the same direction on a tick",
+              "status": "done"
+            },
+            {
+              "id": "V1-S2-T4",
+              "text": "acceptance: given regime + seed, two instruments' tick signs are correlated, not independent; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "ticks are correlated by regime, not independent walks"
+          ]
+        },
+        {
+          "id": "V1-S3",
+          "title": "Sessions + market clock (global)",
+          "status": "done",
+          "files": [
+            "lib/sessions.ts (new)",
+            "lib/market.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "V1-S3-T1",
+              "text": "Session = 'pre'|'open'|'lunch'|'close'|'futures'|'fx-24h'|'halted'; per-instrument session table (ES open ~ Sun-Fri 18:00-17:00 ET, equity RTH 09:30-16:00 ET, FX 24x5)",
+              "status": "done"
+            },
+            {
+              "id": "V1-S3-T2",
+              "text": "marketClock(now) returns per-class state + next-event countdown (equity open, FOMC, ...); feed ticks only for instruments in an active session \u2014 others show 'closed' badge not movement",
+              "status": "done"
+            },
+            {
+              "id": "V1-S3-T3",
+              "text": "half-day + a holiday (e.g. 15th month end) \u2192 equity session shortened, futures still open \u2014 visible contrast on the clock",
+              "status": "done"
+            },
+            {
+              "id": "V1-S3-T4",
+              "text": "acceptance: tsc clean; clock pure; closed instruments don't tick",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "sessions gate ticks; clock pure + deterministic"
+          ]
+        },
+        {
+          "id": "V1-S4",
+          "title": "Macro event calendar (engine-level)",
+          "status": "done",
+          "files": [
+            "lib/macro.ts (new)"
+          ],
+          "subtasks": [
+            {
+              "id": "V1-S4-T1",
+              "text": "Event { kind: FOMC|CPI|NFP|PCE|ECB|JPM, t, volMult, gapBias }; seed 2 weeks of events",
+              "status": "done"
+            },
+            {
+              "id": "V1-S4-T2",
+              "text": "eventPhase(now) -> 'pre'(vol up to volMult)|'live'|'post'(decays); tickers amplify shock*volMult in pre/live",
+              "status": "done"
+            },
+            {
+              "id": "V1-S4-T3",
+              "text": "at print: apply one gap (sign = gapBias + noise) across correlated set, then regime may flip \u2014 this is the signature realism beat",
+              "status": "done"
+            },
+            {
+              "id": "V1-S4-T4",
+              "text": "acceptance: pre-event ticks are visibly higher vol; print produces a discontinuity; post decays; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "FOMC/CPI/NFP produce pre-vol + gap + decay; pure + deterministic"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V2-options",
+      "title": "Options module: chains, greeks, IV, strategies, max pain/GEX",
+      "route": "/options",
+      "nav": {
+        "group": "Trading",
+        "label": "Options"
+      },
+      "summary": "A full options view: per-underlying chain with greeks and IV skew, IV term structure, strategy templates (vertical, straddle, iron condor, calendar) with P&L-at-expiry + live greeks, and an exchange-wide max pain / GEX strip. This is the single biggest 'serious desk' unlock.",
+      "dependsOn": [
+        "V1-market-core"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V2-S1",
+          "title": "Options data (Black-Scholes + greeks)",
+          "status": "done",
+          "files": [
+            "lib/options.ts (new)"
+          ],
+          "subtasks": [
+            {
+              "id": "V2-S1-T1",
+              "text": "bs(S,K,T,r,sig) -> { price, delta, gamma, vega, theta } closed-form; deterministic given inputs",
+              "status": "done"
+            },
+            {
+              "id": "V2-S1-T2",
+              "text": "chain(underlying): 9 strikes around spot, 3 expiries (0DTE/1W/1M), call+put each with IV skew (OTM puts higher IV) + OI + volume",
+              "status": "done"
+            },
+            {
+              "id": "V2-S1-T3",
+              "text": "ivSurface(underlying): term structure (3-9 points, contango typical, flipped in riskoff regime from V1)",
+              "status": "done"
+            },
+            {
+              "id": "V2-S1-T4",
+              "text": "maxPain(underlying, chain) + per-underlying gross gex (long gamma positive/short negative) as a signed bar",
+              "status": "done"
+            },
+            {
+              "id": "V2-S1-T5",
+              "text": "acceptance: BS values match closed-form to 1e-6; skew monotone; gex signed; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "BS + greeks correct; skew + gex present; deterministic"
+          ]
+        },
+        {
+          "id": "V2-S2",
+          "title": "Options UI",
+          "status": "done",
+          "files": [
+            "components/options.tsx (new)"
+          ],
+          "subtasks": [
+            {
+              "id": "V2-S2-T1",
+              "text": "ChainTable: calls | spot line | puts; greeks per leg, ITM shading, OI/volume bars; switcher for underlying + expiry",
+              "status": "done"
+            },
+            {
+              "id": "V2-S2-T2",
+              "text": "IvSkewPanel: call vs put IV vs moneyness (two lines) + term structure sparkline",
+              "status": "done"
+            },
+            {
+              "id": "V2-S2-T3",
+              "text": "StrategyTemplate: pick from vertical/straddle/iron-condor/calendar; shows legs, net delta/vega/theta, breakevens, P&L-at-expiry curve (SVG)",
+              "status": "done"
+            },
+            {
+              "id": "V2-S2-T4",
+              "text": "MaxPainGexStrip: per-spy/es/nvda spot vs max pain + GEX bar (green long gamma / red short)",
+              "status": "done"
+            },
+            {
+              "id": "V2-S2-T5",
+              "text": "acceptance: no chart lib (SVG/CSS); stateless props; hover tooltips for greeks",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "chain+iv+strategy+gex render; stateless; tsc clean"
+          ]
+        },
+        {
+          "id": "V2-S3",
+          "title": "Options page + nav",
+          "status": "done",
+          "files": [
+            "app/options/layout.tsx",
+            "app/options/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V2-S3-T1",
+              "text": "layout.tsx with default pass-through + metadata 'Options'",
+              "status": "done"
+            },
+            {
+              "id": "V2-S3-T2",
+              "text": "page: underlying tabs (SPX/ES/NVDA/BTC), IV skew, chain, strategy P&L, max pain/GEX strip; useMounted gate",
+              "status": "done"
+            },
+            {
+              "id": "V2-S3-T3",
+              "text": "nav: add {label 'Options', href '/options'} under Trading group in chrome.tsx",
+              "status": "done"
+            },
+            {
+              "id": "V2-S3-T4",
+              "text": "gate: build -> tsc -> eslint -> curl /options 200; flip V2 epics done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "route live + listed in build + nav clickable"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V3-futures-rates",
+      "title": "Futures + Treasuries (curve, duration, DV01, ladders, rolls)",
+      "route": "/futures + /rates",
+      "nav": {
+        "group": "Trading",
+        "label": "Futures"
+      },
+      "nav2": {
+        "group": "Trading",
+        "label": "Rates"
+      },
+      "summary": "Futures page: contract ladders with open interest, roll, tick value, margin. Rates page: treasury yield curve, duration/DV01, 2s10s spread, duration ladder. Together with V2 this makes the desk cross-asset.",
+      "dependsOn": [
+        "V1-market-core"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V3-S1",
+          "title": "Futures data",
+          "status": "done",
+          "files": [
+            "lib/futures.ts (new)"
+          ],
+          "subtasks": [
+            {
+              "id": "V3-S1-T1",
+              "text": "contract(symbol, month): { front, next3, tickSize, tickValue, multiplier, oi, volume, margin, basisVsSpot? }",
+              "status": "done"
+            },
+            {
+              "id": "V3-S1-T2",
+              "text": "ladder(ES|NQ|CL|GC|ZB|ZN|ZF): contango/backwardation by type; roll day; open-interest concentration in front 2",
+              "status": "done"
+            },
+            {
+              "id": "V3-S1-T3",
+              "text": "tick futures with V1 regime (riskoff \u2192 ES/NQ down, ZB/ZF up); quote in index price + ticks",
+              "status": "done"
+            },
+            {
+              "id": "V3-S1-T4",
+              "text": "acceptance: ladder ordered, tick values constant, tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "ladders + tick value + roll + regime tickers; deterministic"
+          ]
+        },
+        {
+          "id": "V3-S2",
+          "title": "Futures UI + page + nav",
+          "status": "done",
+          "files": [
+            "components/futures.tsx (new)",
+            "app/futures/layout.tsx",
+            "app/futures/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V3-S2-T1",
+              "text": "LadderTable: months rows, bid/ask, OI bars, margin, tick-value, roll highlight; per-symbol tabs",
+              "status": "done"
+            },
+            {
+              "id": "V3-S2-T2",
+              "text": "page: symbol tabs, ladder, front + curve (3 pt), OI + roll strip; useMounted gate",
+              "status": "done"
+            },
+            {
+              "id": "V3-S2-T3",
+              "text": "nav: {label 'Futures', href '/futures'} under Trading",
+              "status": "done"
+            },
+            {
+              "id": "V3-S2-T4",
+              "text": "gate: build -> tsc -> eslint -> curl /futures 200",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "route live; ladder + OI visible; tsc clean"
+          ]
+        },
+        {
+          "id": "V3-S3",
+          "title": "Treasuries data + UI + page",
+          "status": "done",
+          "files": [
+            "lib/rates.ts (new)",
+            "components/rates.tsx (new)",
+            "app/rates/layout.tsx",
+            "app/rates/page.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V3-S3-T1",
+              "text": "curve(): yields for 1m/3m/2y/5y/10y/30y as a coherent curve (term slope); 2s10s spread; flip under riskoff regime",
+              "status": "done"
+            },
+            {
+              "id": "V3-S3-T2",
+              "text": "duration/DV01 per tenor; duration ladder; curve shift (par) + twist (butterfly) decompose",
+              "status": "done"
+            },
+            {
+              "id": "V3-S3-T3",
+              "text": "CurveChart (SVG) with term labels; RatesPanel: 2s10s, 10y level, duration exposure; ETF legs (TLT/IEF/SHV) with greeks-free duration P&L",
+              "status": "done"
+            },
+            {
+              "id": "V3-S3-T4",
+              "text": "page + nav {label 'Rates', href '/rates'}; gate: build -> tsc -> eslint -> curl /rates 200",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "curve + duration + 2s10s visible; curve flips under riskoff; tsc clean"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V4-fx-intl",
+      "title": "FX majors + international (ADR/local, sessions, DXY, carry)",
+      "route": "/fx + /intl",
+      "nav": {
+        "group": "Trading",
+        "label": "FX"
+      },
+      "nav2": {
+        "group": "Trading",
+        "label": "Intl"
+      },
+      "summary": "FX page for majors with 24x5 session reality + DXY + carry. International page for ADR vs local split, local-session badges, emerging ETFs. This widens the desk beyond US + crypto and lets the clock matter.",
+      "dependsOn": [
+        "V1-market-core"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V4-S1",
+          "title": "FX data + UI + page",
+          "status": "done",
+          "files": [
+            "lib/fx.ts (new)",
+            "components/fx.tsx (new)",
+            "app/fx/layout.tsx",
+            "app/fx/page.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V4-S1-T1",
+              "text": "majors: EUR/USD, USD/JPY, GBP/USD, AUD/USD, USD/CAD + DXY; 5-digit quotes; 24x5 session gating (Sydney/Tokyo/London/NY overlap)",
+              "status": "done"
+            },
+            {
+              "id": "V4-S1-T2",
+              "text": "carry(cy) from policy-rate deltas; riskoff \u2192 safe-haven (JPY/CHF) bid, EM + USD carry sold",
+              "status": "done"
+            },
+            {
+              "id": "V4-S1-T3",
+              "text": "FxTable: pair, bid/ask(2-way), session, spread(bps), carry, dxy link; session-aware (no ticks outside 24x5)",
+              "status": "done"
+            },
+            {
+              "id": "V4-S1-T4",
+              "text": "page + nav {label 'FX', href '/fx'}; gate build -> tsc -> eslint -> curl /fx 200",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "24x5 gating + DXY + carry; riskoff safe-haven tilt; tsc clean"
+          ]
+        },
+        {
+          "id": "V4-S2",
+          "title": "International data + UI + page",
+          "status": "done",
+          "files": [
+            "lib/intl.ts (new)",
+            "components/intl.tsx (new)",
+            "app/intl/layout.tsx",
+            "app/intl/page.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V4-S2-T1",
+              "text": "intl set: ADR + local split (7203.T / 7203, ETRn.DE / ETR.F, 0700.HK / 0700), emerging ETFs (FXI/EWJ/EWI/EEM), local time + session badge",
+              "status": "done"
+            },
+            {
+              "id": "V4-S2-T2",
+              "text": "ADR vs local basis (FX-adjusted) + local session aware tick (closed \u2192 hold, badge 'closed \u00b7 reopens in X')",
+              "status": "done"
+            },
+            {
+              "id": "V4-S2-T3",
+              "text": "page: region tabs (JP/DE/HK/EM), ADR-local pairs, ETF strip, local-clock + session per row; nav {label 'Intl', href '/intl'}; gate curl /intl 200",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "ADR/local + session + EM; closed instruments hold; tsc clean"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V5-brokers",
+      "title": "Brokers v2: Interactive Brokers + capability matrix + money model",
+      "route": "/brokers (upgrades /exchanges)",
+      "nav": {
+        "group": "System",
+        "label": "Brokers"
+      },
+      "summary": "Interactive Brokers as the unified equity/futures/options/FX broker next to the 3 crypto venues. A capability matrix shows which venue trades which asset class. A money model (margin, buying power, interest, fees) makes the 'broker' a real broker, not a label. /exchanges becomes /brokers.",
+      "dependsOn": [
+        "V1-market-core"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V5-S1",
+          "title": "Broker model + Interactive Brokers",
+          "status": "done",
+          "files": [
+            "lib/brokers.ts (new)",
+            "lib/exchanges.ts (extend)"
+          ],
+          "subtasks": [
+            {
+              "id": "V5-S1-T1",
+              "text": "Broker { id, name, type: 'crypto'|'unified', capabilities: InstrumentType[], region, spreadModel, feeBps, marginRate, latencyMs {p50,p99}, status }",
+              "status": "done"
+            },
+            {
+              "id": "V5-S1-T2",
+              "text": "add Interactive Brokers: unified, capabilities = [spot, etf, future, option, treasury, fx], margin rate ~ prime, FLEX-style reconciliation flag",
+              "status": "done"
+            },
+            {
+              "id": "V5-S1-T3",
+              "text": "capability matrix (venue x asset class) as data for UI; 'best venue for <type>' resolver for OMS routing",
+              "status": "done"
+            },
+            {
+              "id": "V5-S1-T4",
+              "text": "acceptance: every instrument in V1 has one or more venues that can trade it; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "brokers typed + IB present; capability matrix resolvable"
+          ]
+        },
+        {
+          "id": "V5-S2",
+          "title": "Money model (margin / buying power / interest / fees)",
+          "status": "done",
+          "files": [
+            "lib/money.ts (new)"
+          ],
+          "subtasks": [
+            {
+              "id": "V5-S2-T1",
+              "text": "margin(positions, tickers): per-type margin (futures fixed/contract, equity 50% long, option premium), initial/excess",
+              "status": "done"
+            },
+            {
+              "id": "V5-S2-T2",
+              "text": "buyingPower = equity - initialMargin; interest on debit via marginRate; fees accrued by venue + instrument (per-share vs per-ctn vs bps)",
+              "status": "done"
+            },
+            {
+              "id": "V5-S2-T3",
+              "text": "reconcile(cash, positions, fills, fees) -> { equity, realized, unrealized, interest, fees, net } \u2014 FLEX-style daily line",
+              "status": "done"
+            },
+            {
+              "id": "V5-S2-T4",
+              "text": "acceptance: reconcile is a pure function of inputs; numbers are consistent (equity = cash + mv - fees - interest); tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "margin + bp + interest + fees consistent; reconcile pure"
+          ]
+        },
+        {
+          "id": "V5-S3",
+          "title": "Brokers page (upgrade /exchanges) + nav",
+          "status": "done",
+          "files": [
+            "app/brokers/layout.tsx",
+            "app/brokers/page.tsx",
+            "components/brokers.tsx (new)",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V5-S3-T1",
+              "text": "BrokerCard: name, type, capabilities (icons), margin rate, p50/p99, fee, status, buy-power used bar",
+              "status": "done"
+            },
+            {
+              "id": "V5-S3-T2",
+              "text": "CapabilityMatrix: rows = brokers, cols = asset classes, filled/empty cell + 'routes N symbols'; moneyModel panel (equity/margin/bp/interest/fees)",
+              "status": "done"
+            },
+            {
+              "id": "V5-S3-T3",
+              "text": "nav: rename System 'Exchanges' -> 'Brokers' href /brokers (or add); /exchanges may 301 or keep as alias",
+              "status": "done"
+            },
+            {
+              "id": "V5-S3-T4",
+              "text": "gate: build -> tsc -> eslint -> curl /brokers 200; flip V5 done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "IB + matrix + money visible; tsc clean"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V6-ai-brain",
+      "title": "AI Brain: computed scores, model registry, A/B, explain, kill-switch",
+      "route": "/ai (upgrades /ai-agent)",
+      "nav": {
+        "group": "Analytics",
+        "label": "AI Brain"
+      },
+      "summary": "Turn the AI from narration into computation. lib/brain.ts scores real tick data per model (each model is a named, versioned, pure function). Signals carry feature attributions, not copy. A model registry manages champion/challenger with drift + per-model P&L. The agent page narrates real computations. This is the centerpiece of 'more AI centric AND more realistic.'",
+      "dependsOn": [
+        "V1-market-core",
+        "V6 can iterate V7"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V6-S1",
+          "title": "lib/brain.ts \u2014 signal as a computation",
+          "status": "done",
+          "files": [
+            "lib/brain.ts (new)",
+            "lib/signals.ts (align)"
+          ],
+          "subtasks": [
+            {
+              "id": "V6-S1-T1",
+              "text": "Features(instrument, state) -> { momZ, bookImb, funding, ivSlope, regimeBeta, spreadBps, corrToEs, ... } \u2014 all derived from V1 tick data, no random",
+              "status": "done"
+            },
+            {
+              "id": "V6-S1-T2",
+              "text": "Model = { id, name, version, universe, weights?, score(features)->number in [-1,1] }; 6 models (momentum-v4.2, orderflow-imb, funding-capture, mean-revert-ml, vol-arb-v2, cross-venue-arb)",
+              "status": "done"
+            },
+            {
+              "id": "V6-S1-T3",
+              "text": "decision(model, features) -> { score, side, confidence, attributions: {featureName: contribution}[] } \u2014 attribution is score*weight normalized, sums to score",
+              "status": "done"
+            },
+            {
+              "id": "V6-S1-T4",
+              "text": "signals now: each has modelId + attributions + score; reason string is generated from top-2 attributions (so it never contradicts the data)",
+              "status": "done"
+            },
+            {
+              "id": "V6-S1-T5",
+              "text": "acceptance: given identical features, decision is identical; attribution sums to score within 1e-9; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "signal = f(features); attribution exact; deterministic"
+          ]
+        },
+        {
+          "id": "V6-S2",
+          "title": "Model registry + champion/challenger + drift + P&L",
+          "status": "done",
+          "files": [
+            "lib/registry.ts (new)"
+          ],
+          "subtasks": [
+            {
+              "id": "V6-S2-T1",
+              "text": "ModelRecord { id, name, version, universe, status: 'live'|'challenger'|'paused', sharpe, dd, winRate, drift: 0-1, pnlUsd, samples, since, championFor? }",
+              "status": "done"
+            },
+            {
+              "id": "V6-S2-T2",
+              "text": "drift(model, recent, baseline) = |mean(features_recent)-mean(features_baseline)| normalized \u2014 a computed number, not a label",
+              "status": "done"
+            },
+            {
+              "id": "V6-S2-T3",
+              "text": "attributionPnl(models, fills): attribute realized P&L to the model that fired the entry (from signal.modelId)",
+              "status": "done"
+            },
+            {
+              "id": "V6-S2-T4",
+              "text": "promote/demote: championFor per universe; challenger becomes champion on win; drift>threshold auto-pauses (kill switch), surfaces in agent feed",
+              "status": "done"
+            },
+            {
+              "id": "V6-S2-T5",
+              "text": "acceptance: promote/demote pure; drift computed; P&L sums to total within rounding; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "registry with A/B + drift + per-model P&L; pure + deterministic"
+          ]
+        },
+        {
+          "id": "V6-S3",
+          "title": "AI Brain page (explain + registry + kill switch) + agent narrates real",
+          "status": "done",
+          "files": [
+            "components/brain.tsx (new)",
+            "app/ai/layout.tsx",
+            "app/ai/page.tsx",
+            "components/agent.tsx (align)"
+          ],
+          "subtasks": [
+            {
+              "id": "V6-S3-T1",
+              "text": "ExplainPanel: pick a live signal -> show features + contribution bars (top +/\u2212) + generated reason; 'why not the other side' = runner-up model's top reason",
+              "status": "done"
+            },
+            {
+              "id": "V6-S3-T2",
+              "text": "RegistryTable: model, universe, version, champion/challenger badge, sharpe/dd/win, drift gauge, P&L, promote/demote buttons; drift>0.8 shows 'PAUSED' + a kill-switch row",
+              "status": "done"
+            },
+            {
+              "id": "V6-S3-T3",
+              "text": "AgentFeed: each step now references a real decision(modelId, symbol, score, topAtts) \u2014 prose is templated from those fields, never contradicts numbers",
+              "status": "done"
+            },
+            {
+              "id": "V6-S3-T4",
+              "text": "nav: Analytics add {label 'AI Brain', href '/ai'}; /ai-agent may alias; gate build -> tsc -> eslint -> curl /ai 200; flip V6 done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "explain bars + registry + agent-narrates-real; tsc clean"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V7-reality",
+      "title": "Reality layer: microstructure + money + OMS hooks across tickers",
+      "route": "cross-cutting",
+      "nav": {
+        "group": "n/a",
+        "label": "n/a"
+      },
+      "summary": "Bake V1 (session/corregime) + V5 (money) + V6 (kill switch) into every panel: spread/latency/queue per venue, slippage by size, 'closed' badges, buying power in the header, drift-paused models visible everywhere. This is the difference between 'looks like a dashboard' and 'feels like a trading terminal.'",
+      "dependsOn": [
+        "V1-market-core",
+        "V5-brokers",
+        "V6-ai-brain"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V7-S1",
+          "title": "Microstructure + money surfaced",
+          "status": "done",
+          "files": [
+            "components/chrome.tsx",
+            "components/ui.tsx",
+            "components/positions.tsx",
+            "components/orders.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V7-S1-T1",
+              "text": "top bar: buying power + used margin (V5 money) with a small 'IB' chip; session clock from V1 (equity open/close countdown + FX 24x5 + 'FUT open')",
+              "status": "done"
+            },
+            {
+              "id": "V7-S1-T2",
+              "text": "every instrument row: 2-way bid/ask (not a single mid) + spread(bps) + venue latency chip; closed instruments show 'closed \u00b7 reopens in X' not a stale price",
+              "status": "done"
+            },
+            {
+              "id": "V7-S1-T3",
+              "text": "position P&L is mark-to-bid/ask by side (long marks to bid, short to ask) with a slippage hint; interest accrued in the cash strip",
+              "status": "done"
+            },
+            {
+              "id": "V7-S1-T4",
+              "text": "acceptance: no single-mid anywhere in a position/order; closed rows visibly gated; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "bid/ask + money + session visible; tsc clean"
+          ]
+        },
+        {
+          "id": "V7-S2",
+          "title": "Global regime + drift strip + macro banner",
+          "status": "done",
+          "files": [
+            "components/brain.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V7-S2-T1",
+              "text": "RegimeChip: current volState/trend + driver, color-coded; when it flips, feed a log line + (if riskoff) a subtle 'risk-off' banner",
+              "status": "done"
+            },
+            {
+              "id": "V7-S2-T2",
+              "text": "DriftStrip: a small horizontal bar per model showing drift vs threshold; one paused \u2192 red + 'killed' reason tooltip",
+              "status": "done"
+            },
+            {
+              "id": "V7-S2-T3",
+              "text": "MacroBanner: next FOMC/CPI/NFP countdown from V1 macro; during phase=live it highlights; on print it flashes the gap magnitude",
+              "status": "done"
+            },
+            {
+              "id": "V7-S2-T4",
+              "text": "acceptance: regime + drift + macro all derive from lib state, no duplication; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "regime + drift + macro surfaced; no duplicated state"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V8-oms",
+      "title": "Order Management realism: types, amend/cancel/reject, queue, execution reports",
+      "route": "/orders (upgrade)",
+      "nav": {
+        "group": "Trading",
+        "label": "Orders"
+      },
+      "summary": "Upgrades /orders from 'instant fill' to a real OMS: BRK/OCO/ICEBERG order types, amend + cancel, rejections with reasons (RTH, buying power, min-tick, min-size), queue position with time-at-price, partial fills over multiple ticks, slippage by size vs venue, execution reports. This is where the 'AI decision' meets friction \u2014 the most credible place to be AI realistic.",
+      "dependsOn": [
+        "V1-market-core",
+        "V5-brokers",
+        "V6-ai-brain"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V8-S1",
+          "title": "OMS engine (orders as state machines)",
+          "status": "done",
+          "files": [
+            "lib/oms.ts (new)",
+            "lib/orders.ts (align)"
+          ],
+          "subtasks": [
+            {
+              "id": "V8-S1-T1",
+              "text": "Order { id, symbol, side, type: 'LMT'|'STP'|'STP_LMT'|'BRK'|'OCO'|'ICE', qty, limitPx?, stopPx?, tif, status, venue, modelId?, parent?, child? }",
+              "status": "done"
+            },
+            {
+              "id": "V8-S1-T2",
+              "text": "tick(orders, tickers, money) -> { orders, fills, rejects }: fill if price crosses; BRK child cancel on parent fill; OCO sibling cancel; ICEBERG shows display < qty",
+              "status": "done"
+            },
+            {
+              "id": "V8-S1-T3",
+              "text": "reject(order, ctx) reasons: 'RTH-only (ITM close)', 'buying power short $X', 'min-tick/qty for <inst>', 'session closed'; reject is a first-class Order.status",
+              "status": "done"
+            },
+            {
+              "id": "V8-S1-T4",
+              "text": "queue(order, venue, depth) -> position + expected wait; slippage(size, bidAsk, venueLatency) in bps for market/STP",
+              "status": "done"
+            },
+            {
+              "id": "V8-S1-T5",
+              "text": "acceptance: all transitions pure + deterministic; BRK/OCO cancel correctly; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "OMS pure; BRK/OCO/ICE correct; reject reasons + queue + slippage"
+          ]
+        },
+        {
+          "id": "V8-S2",
+          "title": "OMS UI + execution reports + blotter",
+          "status": "done",
+          "files": [
+            "components/oms.tsx (new)",
+            "components/orders.tsx (align)"
+          ],
+          "subtasks": [
+            {
+              "id": "V8-S2-T1",
+              "text": "OrderTicket: symbol/type/qty/px/stop/tif + 'estimated fill + slippage(bps) + venue + bp used if filled' preview; submit -> shows queued with position",
+              "status": "done"
+            },
+            {
+              "id": "V8-S2-T2",
+              "text": "WorkingOrders table: status pill (working/queued/partial/filled/rejected), queue position, time-at-price, partial fill progress; cancel + amend (limit only) buttons",
+              "status": "done"
+            },
+            {
+              "id": "V8-S2-T3",
+              "text": "ExecReports: each fill shows venue, latency(ms), slippage(bps) vs signal, modelId (from V6) \u2014 'AI decided at T0, filled at T0+12ms, slippage 0.8bps'",
+              "status": "done"
+            },
+            {
+              "id": "V8-S2-T4",
+              "text": "Blotter (P&L reconciliation): realized by instrument-type/venue/day, unrealized mark, interest + fees strip from V5 money; net line = reconcile() from V5",
+              "status": "done"
+            },
+            {
+              "id": "V8-S2-T5",
+              "text": "gate: upgrade /orders in place OR add /oms; build -> tsc -> eslint -> curl /orders 200",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "ticket + working + reports + blotter; tsc clean; curl 200"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V9-lifecycle",
+      "title": "Strategy lifecycle: template \u2192 backtest \u2192 paper \u2192 live + gates",
+      "route": "/strategies (upgrade) + /backtests (v2)",
+      "nav": {
+        "group": "Trading",
+        "label": "Strategies"
+      },
+      "summary": "A strategy is not a label, it's a lifecycle: pick a template, parameterize, backtest (walk-forward + Monte Carlo + sensitivity), paper trade, then go live with explicit risk params (stop, sizing, daily loss cap). The AI Brain (V6) can propose params; the OMS (V8) enforces risk. This closes the loop from 'idea' to 'live' and makes the AI accountable.",
+      "dependsOn": [
+        "V6-ai-brain",
+        "V8-oms"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V9-S1",
+          "title": "Strategy object + lifecycle state",
+          "status": "done",
+          "files": [
+            "lib/strategy-lifecycle.ts (new)",
+            "lib/strategies.ts (align)"
+          ],
+          "subtasks": [
+            {
+              "id": "V9-S1-T1",
+              "text": "Strategy { id, modelId, universe, params, risk: { stopPct, sizeUsd, dailyLossCap, maxCorr }, state: 'template'|'backtested'|'paper'|'live'|'killed', since }",
+              "status": "done"
+            },
+            {
+              "id": "V9-S1-T2",
+              "text": "gates: goLive(strat) requires backtested.winRate>0.5 && sharpe>1 && dd<10 || AI signoff (from V6 decision); paper \u2192 live on min samples; kill on dd cap or drift>threshold (V6)",
+              "status": "done"
+            },
+            {
+              "id": "V9-S1-T3",
+              "text": "aiSuggestParams(universe, recent) -> a candidate param set with a one-line rationale from a V6 decision \u2014 'momentum on NVDA z-score', not a random string",
+              "status": "done"
+            },
+            {
+              "id": "V9-S1-T4",
+              "text": "acceptance: goLive gates are computable; ai-suggest pure; strategy state machine never invalid; tsc clean",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "strategy has state + risk + gates; pure + deterministic"
+          ]
+        },
+        {
+          "id": "V9-S2",
+          "title": "Backtest v2 (walk-forward + MC + sensitivity)",
+          "status": "done",
+          "files": [
+            "lib/backtests-v2.ts (new)",
+            "components/backtests.tsx (extend)"
+          ],
+          "subtasks": [
+            {
+              "id": "V9-S2-T1",
+              "text": "walkForward(params, data, kfold): in-sample vs out-of-sample Sharpe with a decay bar; flag overfit if IS>2*OS",
+              "status": "done"
+            },
+            {
+              "id": "V9-S2-T2",
+              "text": "monteCarlo(fills, n=200): dd distribution + 95/99 percentile DD; a 'p(lose>20%) = X%' headline",
+              "status": "done"
+            },
+            {
+              "id": "V9-S2-T3",
+              "text": "sensitivityHeatmap(params): grid of 2 params -> Sharpe; highlight the flat region (robust) vs the spike (overfit)",
+              "status": "done"
+            },
+            {
+              "id": "V9-S2-T4",
+              "text": "page: existing runs table + IS/OS + MC dd + sensitivity; a 'GO LIVE' button gated by V9-S1",
+              "status": "done"
+            },
+            {
+              "id": "V9-S2-T5",
+              "text": "gate: build -> tsc -> eslint -> curl /backtests 200",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "IS/OS + MC dd + heatmap; gate + tsc clean"
+          ]
+        },
+        {
+          "id": "V9-S3",
+          "title": "Strategies page (lifecycle view)",
+          "status": "done",
+          "files": [
+            "components/strategies.tsx (new)",
+            "app/strategies/page.tsx (extend)"
+          ],
+          "subtasks": [
+            {
+              "id": "V9-S3-T1",
+              "text": "LifecycleBoard: columns template/backtested/paper/live/killed; each card shows modelId (V6), params, risk, state, 'next gate' hint",
+              "status": "done"
+            },
+            {
+              "id": "V9-S3-T2",
+              "text": "GoLive flow: click \u2192 gate checklist (win, sharpe, dd, risk-params set) with the failing gate highlighted; sign via AI (V6) or operator",
+              "status": "done"
+            },
+            {
+              "id": "V9-S3-T3",
+              "text": "Live column: P&L from V6 attribution + drift gauge; 'killed' column shows the kill reason (dd or drift)",
+              "status": "done"
+            },
+            {
+              "id": "V9-S3-T4",
+              "text": "gate: build -> tsc -> eslint -> curl /strategies 200; flip V9 done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "lifecycle board + gate flow + tsc clean; curl 200"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V10-polish",
+      "title": "IA re-org + search v2 + cross-links + final gate",
+      "route": "multiple",
+      "nav": {
+        "group": "n/a",
+        "label": "n/a"
+      },
+      "summary": "Reorganize IA for cross-asset (add groups), extend search index with all new pages + instruments + models, cross-link footers across v2 pages, and pass the full gate across every route (v1 + v2). This is the ship gate.",
+      "dependsOn": [
+        "V1-market-core",
+        "V2-options",
+        "V3-futures-rates",
+        "V4-fx-intl",
+        "V5-brokers",
+        "V6-ai-brain",
+        "V7-reality",
+        "V8-oms",
+        "V9-lifecycle"
+      ],
+      "status": "done",
+      "stories": [
+        {
+          "id": "V10-S1",
+          "title": "IA + search + cross-links",
+          "status": "done",
+          "files": [
+            "components/chrome.tsx",
+            "lib/search.ts",
+            "components/search.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "V10-S1-T1",
+              "text": "NAV groups: Trading (Dashboard, Strategies, Signals, Positions, Orders, Options, Futures, Rates, FX, Intl), Analytics (Backtests, Risk Lab, Performance, AI Brain), System (Brokers, Logs, Settings, Profile)",
+              "status": "done"
+            },
+            {
+              "id": "V10-S1-T2",
+              "text": "search index: add all v2 pages, all instruments (incl. futures/rates/FX/intl/option), all models (with version + universe); kind rank puts pages first",
+              "status": "done"
+            },
+            {
+              "id": "V10-S1-T3",
+              "text": "cross-link footers: each v2 page links to 2-3 most related (Options->Futures->Rates, Futures->Rates, FX->Intl, Brokers->Orders, AI Brain->Signals->Strategies, etc)",
+              "status": "done"
+            },
+            {
+              "id": "V10-S1-T4",
+              "text": "acceptance: every route 1-click from sidebar or top bar; search finds ES/10y/EURUSD/momentum-v4.2",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "IA + search + cross-links; every route reachable"
+          ]
+        },
+        {
+          "id": "V10-S2",
+          "title": "Final gate (all routes v1 + v2)",
+          "status": "done",
+          "files": [],
+          "subtasks": [
+            {
+              "id": "V10-S2-T1",
+              "text": "npx next build + npx tsc --noEmit + npx eslint . across whole repo \u2014 zero errors, zero warnings",
+              "status": "done"
+            },
+            {
+              "id": "V10-S2-T2",
+              "text": "curl every route -> 200: v1 13 + v2 (Options, Futures, Rates, FX, Intl, Brokers, AI Brain) + /orders (OMS) + /strategies + /backtests + /ai (or /ai-agent)",
+              "status": "done"
+            },
+            {
+              "id": "V10-S2-T3",
+              "text": "manual check: FOMC countdown in top bar, a closed instrument holds, a signal shows attribution bars, an AI model pauses on drift, an OMS order rejects for buying power",
+              "status": "done"
+            },
+            {
+              "id": "V10-S2-T4",
+              "text": "flip all epics done + meta.overallStatus = done + meta.updated; write a short README section 'v2 \u2014 what's real vs mocked' for honesty",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "zero lint/type errors; all routes 200; the 5 named realism beats work"
+          ]
+        }
+      ]
+    }
+  ]
+}

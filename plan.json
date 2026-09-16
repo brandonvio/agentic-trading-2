@@ -1,0 +1,1297 @@
+{
+  "meta": {
+    "name": "NX Trading — remaining system build-out",
+    "version": 2,
+    "project": "/Users/brandon/code/projects/opencode-ollama-1/nx-trading",
+    "updated": "2026-09-02",
+    "overallStatus": "done",
+    "stack": {
+      "framework": "Next.js 16.3.4 (App Router, Turbopack) — Next 16 differs from training data; consult node_modules/next/dist/docs/ before framework-level changes",
+      "react": "19.2.8",
+      "css": "Tailwind CSS 4 via @tailwindcss/postcss (CSS vars + @theme inline; NO tailwind.config)",
+      "pm": "pnpm 11.24.0"
+    },
+    "conventions": {
+      "pageAnatomy": "lib/<feature>.ts (types, seed, pure tick, stats) -> components/<feature>.x (stateless presentational) -> app/<route>/layout.tsx (server: metadata + default pass-through export) -> app/<route>/page.tsx (client orchestrator)",
+      "hydration": "client pages gate first paint with useMounted() from components/framework.tsx and render <Splash /> until mounted (Math.random in initial state is unsafe otherwise)",
+      "liveData": "client state + setInterval calling pure lib functions; pause via activeRef + useEffect so intervals don't restart; tape/state via useState (needs setter for ticks)",
+      "nav": "add href to the matching item in components/chrome.tsx NAV (groups: Trading | Analytics | System)",
+      "imports": "relative paths only (../../lib, ../../components)",
+      "uiKit": "Panel, LiveDot, Delta, Badge (no 'dim'), Sparkline, Ring (tone = CSS color string, no 'label') from components/ui.tsx; usd() from components/panels.tsx",
+      "lintNote": "npx next lint does NOT exist in Next 16 — use npx eslint .",
+      "typesNote": "tsc needs .next/types present (LayoutProps generated): order is next build -> tsc -> eslint; stale .next/dev/types cause phantom errors — rm -rf .next then rebuild",
+      "subshellNote": "use npx next start / npx next build in bash subshells (next not on PATH)"
+    },
+    "validationGate": [
+      "npx next build (route listed, static)",
+      "npx tsc --noEmit",
+      "npx eslint .",
+      "npx next start -p <free-port> + curl new route -> HTTP 200"
+    ],
+    "howToUpdate": "flip subtask/story/epic status as work lands (todo -> in-progress -> done); set epicStatus when all story stories are done; bump meta.updated and meta.version on each turn; overallStatus = done when final validation gate passes on all routes"
+  },
+  "epicStatus": {
+    "E1-positions": "done",
+    "E2-backtests": "done",
+    "E3-risk-lab": "done",
+    "E4-performance": "done",
+    "E5-ai-agent": "done",
+    "E6-exchanges": "done",
+    "E7-logs": "done",
+    "E8-settings": "done",
+    "E9-profile": "done",
+    "E10-search": "done",
+    "E11-final": "done"
+  },
+  "epics": [
+    {
+      "id": "E1-positions",
+      "title": "Positions",
+      "route": "/positions",
+      "nav": {
+        " group": "Trading",
+        "label": "Positions"
+      },
+      "summary": "Portfolio of open positions: live unrealized P&L, exposure, per-position risk, close/half actions, realized-trade log, P&L attribution by symbol.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E1-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/positions.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E1-S1-T1",
+              "text": "Position type: id, symbol, side (LONG/SHORT), qty, entryPx, markPx, stopPx, targetPx, strategy, venue, openedAgeSec, marginUsed, leverage, realizedPnl, unrealizedPnl, mfe, mae, riskUsd (|mark-stop|*qty)",
+              "status": "done"
+            },
+            {
+              "id": "E1-S1-T2",
+              "text": "seedPositions(): 8-10 rows reusing lib/market.ts SEED_POSITIONS + strategy names; mix LONG/SHORT, crypto (-USD) + equities, varied entry/age",
+              "status": "done"
+            },
+            {
+              "id": "E1-S1-T3",
+              "text": "tickPositions(): drift markPx (±0.05-0.12%), recompute unrealizedPnl + mfe/mae; ~5% chance one position auto-closes (realized push to closes log, remove)",
+              "status": "done"
+            },
+            {
+              "id": "E1-S1-T4",
+              "text": "actOnPosition(positions, id, 'close' | 'half'): pure, returns {positions, closes}",
+              "status": "done"
+            },
+            {
+              "id": "E1-S1-T5",
+              "text": "stats: equity (1M base + realized), gross, net, unrealized, marginUsagePct, avgUnrealizedPct, worstUnrealized, openCount",
+              "status": "done"
+            },
+            {
+              "id": "E1-S1-T6",
+              "text": "bySymbol(): unrealized $ + exposure per symbol (for bars)",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "all pure functions, strict tsc clean",
+            "tick evolves book each 2.4s"
+          ]
+        },
+        {
+          "id": "E1-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/positions.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E1-S2-T1",
+              "text": "KpiStrip (8 tiles): equity, gross, net, unrealized $+%, realized, margin usage, avg %, worst",
+              "status": "done"
+            },
+            {
+              "id": "E1-S2-T2",
+              "text": "PositionsTable: symbol+strategy, side chip, qty, entry, mark, stop, target, unrealized (Delta + bar), margin, lev, riskUsd, MFE/MAE mini-bars, age; desktop row actions ⚡Close / ½Half / ✕Stop",
+              "status": "done"
+            },
+            {
+              "id": "E1-S2-T3",
+              "text": "RealizedLog (cap 30): time, symbol, side, qty, px, pnl",
+              "status": "done"
+            },
+            {
+              "id": "E1-S2-T4",
+              "text": "PnlBySymbol diverging bars (long green / short rose)",
+              "status": "done"
+            },
+            {
+              "id": "E1-S2-T5",
+              "text": "ExposurePanel: long/short bars + net + margin Ring",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "props-only components, no state, no new deps"
+          ]
+        },
+        {
+          "id": "E1-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/positions/layout.tsx",
+            "app/positions/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E1-S3-T1",
+              "text": "layout.tsx metadata 'Positions — NX Trading' + default pass-through export",
+              "status": "done"
+            },
+            {
+              "id": "E1-S3-T2",
+              "text": "page.tsx: useMounted+Splash, state {positions, closes, filter, query, paused}, 2.4s tick via activeRef",
+              "status": "done"
+            },
+            {
+              "id": "E1-S3-T3",
+              "text": "toolbar: All/Long/Short chips + symbol search + Pause/Resume + Close all (bulk realize)",
+              "status": "done"
+            },
+            {
+              "id": "E1-S3-T4",
+              "text": "layout: KPI strip -> PositionsTable -> grid xl:12 (RealizedLog 4 / PnlBySymbol 4 / ExposurePanel 4)",
+              "status": "done"
+            },
+            {
+              "id": "E1-S3-T5",
+              "text": "chrome.tsx: Positions href '/positions'",
+              "status": "done"
+            },
+            {
+              "id": "E1-S3-T6",
+              "text": "VALIDATION GATE (build/tsc/eslint/curl 200) + flip E1 stories/epic to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "row actions mutate state and feed RealizedLog",
+            "active nav state on route"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E2-backtests",
+      "title": "Backtests",
+      "route": "/backtests",
+      "nav": {
+        "group": "Analytics",
+        "label": "Backtests"
+      },
+      "summary": "Historical strategy evaluations: runs table, equity/drawdown SVG charts, parameter grid, rerun-with-jitter, sort + symbol filter.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E2-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/backtests.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E2-S1-T1",
+              "text": "BacktestRun: id, label, strategy, symbol, timeframe (1m/5m/1h/1d), rangeText, params {lookback, threshold, maxPos, riskPct}, metrics {netPnl, sharpe, sortino, maxDD, winRate, profitFactor, trades, cagr}, equityCurve (64 numbers), drawdown (64 negative numbers)",
+              "status": "done"
+            },
+            {
+              "id": "E2-S1-T2",
+              "text": "genRuns(): 6 runs (reuse market.ts strategy/symbol names); coherent metrics (higher sharpe => lower maxDD); curves random-walk, dd derived from equity",
+              "status": "done"
+            },
+            {
+              "id": "E2-S1-T3",
+              "text": "rerun(run): jitter every metric 1.5-4% and regenerate curves => returns new run (id preserved)",
+              "status": "done"
+            },
+            {
+              "id": "E2-S1-T4",
+              "text": "sortRuns(runs, 'sharpe'|'netPnl'|'trades') helper",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "pure, strict tsc clean"
+          ]
+        },
+        {
+          "id": "E2-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/backtests.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E2-S2-T1",
+              "text": "MetricChip (value + tone band)",
+              "status": "done"
+            },
+            {
+              "id": "E2-S2-T2",
+              "text": "EquityArea + DrawdownArea: inline SVG polyline + gradient fill from number[] (viewBox 0 0 100 32, safe for short arrays)",
+              "status": "done"
+            },
+            {
+              "id": "E2-S2-T3",
+              "text": "RunsTable: label/strategy/symbol/TF, netPnl, sharpe, maxDD, winRate, trades, select + ↻ rerun; selected row ring",
+              "status": "done"
+            },
+            {
+              "id": "E2-S2-T4",
+              "text": "RunDetail: EquityArea + DrawdownArea stack, params grid (4-6 k/v), MetricChip row, Rerun button",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "no chart lib; stateless props"
+          ]
+        },
+        {
+          "id": "E2-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/backtests/layout.tsx",
+            "app/backtests/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E2-S3-T1",
+              "text": "layout.tsx metadata + default export",
+              "status": "done"
+            },
+            {
+              "id": "E2-S3-T2",
+              "text": "page.tsx: state {runs, selectedId, sortKey, symbolFilter, rerunningId}; no auto-tick; rerun = immediate jitter (button spins 700ms)",
+              "status": "done"
+            },
+            {
+              "id": "E2-S3-T3",
+              "text": "layout: header (run count + best sharpe) -> sort tabs + symbol chips -> grid xl:12 (RunsTable 7 / RunDetail 5)",
+              "status": "done"
+            },
+            {
+              "id": "E2-S3-T4",
+              "text": "chrome.tsx: Backtests href '/backtests'",
+              "status": "done"
+            },
+            {
+              "id": "E2-S3-T5",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "selecting a row swaps detail",
+            "rerun visibly changes metrics+curve"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E3-risk-lab",
+      "title": "Risk Lab",
+      "route": "/risk-lab",
+      "nav": {
+        "group": "Analytics",
+        "label": "Risk Lab"
+      },
+      "summary": "Scenario risk: VaR/CVaR panel, limit-utilization gauges, scenario table that stresses the book (P&L delta + breached limits), stress heatmap matrix.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E3-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/risklab.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E3-S1-T1",
+              "text": "RiskLimits: 6 named limits {name, used, limit, unit} -> pct",
+              "status": "done"
+            },
+            {
+              "id": "E3-S1-T2",
+              "text": "computeVaCvar(returns[]): 95% VaR, 99% VaR, CVaR95 over 1d/10d horizons from a seeded randn-ish daily returns array",
+              "status": "done"
+            },
+            {
+              "id": "E3-S1-T3",
+              "text": "Scenario: {id, name (Vol spike +2σ, Gap down −6%, Correlation blow-up, Liquidity loss, Exchange outage, Model drift), severity 1-4, pnlDeltaUsd, varImpact, breachBoostByLimit {name→delta}}; applyScenario(limits, scen): stressed {pct, breached} per limit",
+              "status": "done"
+            },
+            {
+              "id": "E3-S1-T4",
+              "text": "stressMatrix: severity-weighted impact table per (scenario, dimension)",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "deterministic given inputs; pure"
+          ]
+        },
+        {
+          "id": "E3-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/risklab.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E3-S2-T1",
+              "text": "LimitGauge: Ring (ui.tsx) colored by pct band + label + used/limit mono",
+              "status": "done"
+            },
+            {
+              "id": "E3-S2-T2",
+              "text": "VaCvarPanel: 95/99/10d VaR + CVaR tiles",
+              "status": "done"
+            },
+            {
+              "id": "E3-S2-T3",
+              "text": "ScenarioTable: rows with severity dot, pnlDelta (Delta), Apply button (selected row ring)",
+              "status": "done"
+            },
+            {
+              "id": "E3-S2-T4",
+              "text": "StressHeatmap: CSS grid — scenarios x dimensions, cell bg by impact band (emerald→amber→rose)",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "stateless props"
+          ]
+        },
+        {
+          "id": "E3-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/risk-lab/layout.tsx",
+            "app/risk-lab/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E3-S3-T1",
+              "text": "layout.tsx metadata + default export",
+              "status": "done"
+            },
+            {
+              "id": "E3-S3-T2",
+              "text": "page.tsx: state {appliedScenarioId, stressed}; Apply/Reset; banner shows stressed P&L delta when scenario active",
+              "status": "done"
+            },
+            {
+              "id": "E3-S3-T3",
+              "text": "layout: header + scenario banner -> grid xl:12 (LimitGauges 5 / VaCvar+ScenarioTable 7) -> StressHeatmap full",
+              "status": "done"
+            },
+            {
+              "id": "E3-S3-T4",
+              "text": "chrome.tsx: Risk Lab href '/risk-lab'",
+              "status": "done"
+            },
+            {
+              "id": "E3-S3-T5",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "applying scenario flags breached gauges red",
+            "reset restores baseline"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E4-performance",
+      "title": "Performance",
+      "route": "/performance",
+      "nav": {
+        "group": "Analytics",
+        "label": "Performance"
+      },
+      "summary": "Account performance: 12-month return heatmap, attribution (strategy/symbol/factor bars), self vs benchmark history chart, rolling windows strip.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E4-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/performance.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E4-S1-T1",
+              "text": "monthsMatrix(): 12 months x 20-22 daily returns% with seasonality (Q4 best, Jul weak); monthly totals derived",
+              "status": "done"
+            },
+            {
+              "id": "E4-S1-T2",
+              "text": "attribution(): {byStrategy[5], bySymbol[6], byFactor[4]: {name, pnl, pct}}",
+              "status": "done"
+            },
+            {
+              "id": "E4-S1-T3",
+              "text": "history(): 90 daily {selfUsd, benchUsd, selfPct, benchPct} with self beating bench by +60bps/day-ish",
+              "status": "done"
+            },
+            {
+              "id": "E4-S1-T4",
+              "text": "rolling(): windows 1w/1m/3m/6m {sharpe, winRate, profitFactor, pnlPct}",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "deterministic; pure"
+          ]
+        },
+        {
+          "id": "E4-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/performance.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E4-S2-T1",
+              "text": "Heatmap: CSS grid 12 rows, cell bg by return band, hover title, month labels",
+              "status": "done"
+            },
+            {
+              "id": "E4-S2-T2",
+              "text": "AttributionBars: diverging horizontal bars around 0 with $ + pct",
+              "status": "done"
+            },
+            {
+              "id": "E4-S2-T3",
+              "text": "HistoryChart: inline SVG — self area + bench dashed polyline + legend",
+              "status": "done"
+            },
+            {
+              "id": "E4-S2-T4",
+              "text": "RollingStrip: 4 window tiles (sharpe/win/PF)",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "no chart lib; stateless props"
+          ]
+        },
+        {
+          "id": "E4-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/performance/layout.tsx",
+            "app/performance/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E4-S3-T1",
+              "text": "layout.tsx metadata + default export",
+              "status": "done"
+            },
+            {
+              "id": "E4-S3-T2",
+              "text": "page.tsx: static (no tick); headline KPIs (cumulative $, YTD, best month, alpha vs bench)",
+              "status": "done"
+            },
+            {
+              "id": "E4-S3-T3",
+              "text": "layout: header + KPI row -> grid xl:12 (Heatmap 7 / Attribution 5) -> HistoryChart full -> RollingStrip -> footer",
+              "status": "done"
+            },
+            {
+              "id": "E4-S3-T4",
+              "text": "chrome.tsx: Performance href '/performance'",
+              "status": "done"
+            },
+            {
+              "id": "E4-S3-T5",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "all four panels render; heatmap has 12 rows"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E5-ai-agent",
+      "title": "AI Agent",
+      "route": "/ai-agent",
+      "nav": {
+        "group": "System",
+        "label": "AI Agent"
+      },
+      "summary": "Autopilot observer: live reasoning stream (thought → tool → observe → decision steps), confidence ring, guardrails panel, model/token telemetry, pause + one-shot burst.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E5-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/agent.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E5-S1-T1",
+              "text": "AgentStep: {id, tsAgo, kind: 'thought'|'tool'|'observe'|'decision', text, tool?, ms?, tokens?}",
+              "status": "done"
+            },
+            {
+              "id": "E5-S1-T2",
+              "text": "seedStream(): 8-12 initial steps (realistic quant copy); pools of candidate steps per kind",
+              "status": "done"
+            },
+            {
+              "id": "E5-S1-T3",
+              "text": "tickStream(steps, confidence): prepend 1-2 new steps (weighted kinds), drift confidence ±3 clamp 55-96, cap length 40",
+              "status": "done"
+            },
+            {
+              "id": "E5-S1-T4",
+              "text": "burst(steps): 4-step thought→tool→observe→decision sequence for 'Run once' action",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "pure, deterministic-ish with seeded pools, strict tsc clean"
+          ]
+        },
+        {
+          "id": "E5-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/agent.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E5-S2-T1",
+              "text": "StepRow: kind-tinted icon + text + tool chip + ms/tokens mono; newest-first list in scrollable Panel",
+              "status": "done"
+            },
+            {
+              "id": "E5-S2-T2",
+              "text": "ConfidenceRing: Ring (ui.tsx) with % label + trend delta",
+              "status": "done"
+            },
+            {
+              "id": "E5-S2-T3",
+              "text": "GuardrailsPanel: 5 rows (max drawdown, per-trade cap, venue whitelist, kill switch, model drift monitor) with ok/warn state",
+              "status": "done"
+            },
+            {
+              "id": "E5-S2-T4",
+              "text": "Telemetry: model label, tokens/s, p50 ms, uptime",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "stateless props"
+          ]
+        },
+        {
+          "id": "E5-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/ai-agent/layout.tsx",
+            "app/ai-agent/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E5-S3-T1",
+              "text": "layout.tsx metadata + default export",
+              "status": "done"
+            },
+            {
+              "id": "E5-S3-T2",
+              "text": "page.tsx: state {steps, confidence, paused, tokensTotal}, 1.9s tick via activeRef; tokensTotal accumulates from tick deltas",
+              "status": "done"
+            },
+            {
+              "id": "E5-S3-T3",
+              "text": "controls: Pause/Resume, Run once (burst), Reset stream",
+              "status": "done"
+            },
+            {
+              "id": "E5-S3-T4",
+              "text": "layout: header + KPI chips -> grid xl:12 (Stream 8 / rail 4: ConfidenceRing, Telemetry, Guardrails)",
+              "status": "done"
+            },
+            {
+              "id": "E5-S3-T5",
+              "text": "chrome.tsx: AI Agent href '/ai-agent'",
+              "status": "done"
+            },
+            {
+              "id": "E5-S3-T6",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "stream grows while running; pause freezes; burst adds 4 steps once"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E6-exchanges",
+      "title": "Exchanges",
+      "route": "/exchanges",
+      "nav": {
+        "group": "System",
+        "label": "Exchanges"
+      },
+      "summary": "Venue healthboard: status cards (online/degraded/maintenance), latency p50/p99, rate-limit rings, balances, fees, last-sync, event log with transient flaps.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E6-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/exchanges.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E6-S1-T1",
+              "text": "Venue: {name, tag (OKX·T0 / BINANCE·T1 / COINBASE·T2 / ALPACA·EQ1 / ARBITRAGE), status, p50ms, p99ms, balUsd, feeBps, rlimitUsed, rlimitMax, region, lastSyncAgoSec}",
+              "status": "done"
+            },
+            {
+              "id": "E6-S1-T2",
+              "text": "seedVenues(): 5 venues matching the orders/signals venue strings",
+              "status": "done"
+            },
+            {
+              "id": "E6-S1-T3",
+              "text": "tickVenues(): p50/p99 jitter, r-limit walk (refill toward max), lastSync reset to 0-2s, 4% flap to degraded for 1-2 ticks then recover online; events log {ts, venue, msg, level} cap 30",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "flaps transient; log newest-first; pure"
+          ]
+        },
+        {
+          "id": "E6-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/exchanges.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E6-S2-T1",
+              "text": "StatusChip (online=long / degraded=amber / maint=rose) with LiveDot",
+              "status": "done"
+            },
+            {
+              "id": "E6-S2-T2",
+              "text": "VenueCard: name+tag, StatusChip, p50/p99 mono, balUsd, fee, rlimit Ring, last-sync",
+              "status": "done"
+            },
+            {
+              "id": "E6-S2-T3",
+              "text": "VenueEventLog: mono rows with level tint (ok=emerald/amber/rose), venue tag, relative age",
+              "status": "done"
+            },
+            {
+              "id": "E6-S2-T4",
+              "text": "Kpis: total venues, online, avg p50, aggregate bal, active alerts",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "responsive 1/2/3/5 col grid; stateless props"
+          ]
+        },
+        {
+          "id": "E6-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/exchanges/layout.tsx",
+            "app/exchanges/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E6-S3-T1",
+              "text": "layout.tsx metadata + default export",
+              "status": "done"
+            },
+            {
+              "id": "E6-S3-T2",
+              "text": "page.tsx: state {venues, events, paused}, 2.6s tick via activeRef",
+              "status": "done"
+            },
+            {
+              "id": "E6-S3-T3",
+              "text": "layout: header (ALL VENUES chip + Pause/Resume + 'Suspend venue' demo button) -> Kpis -> venue card grid -> VenueEventLog",
+              "status": "done"
+            },
+            {
+              "id": "E6-S3-T4",
+              "text": "chrome.tsx: Exchanges href '/exchanges'",
+              "status": "done"
+            },
+            {
+              "id": "E6-S3-T5",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "a flap visibly degrades a card then recovers; log grows"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E7-logs",
+      "title": "Logs",
+      "route": "/logs",
+      "nav": {
+        "group": "System",
+        "label": "Logs"
+      },
+      "summary": "System stream: live terminal-style log feed with level chips (DEBUG/INFO/WARN/ERROR/SYS), source filter, pause, copy-clear, auto-scroll.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E7-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/logs.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E7-S1-T1",
+              "text": "LogLine: {id, ts, level: 'DEBUG'|'INFO'|'WARN'|'ERROR'|'SYS', source ('market'|'signal'|'order'|'risk'|'agent'|'venue'|'core'), msg, meta?}",
+              "status": "done"
+            },
+            {
+              "id": "E7-S1-T2",
+              "text": "seedLines(): 30 plausible lines referencing real pages/venues/symbols",
+              "status": "done"
+            },
+            {
+              "id": "E7-S1-T3",
+              "text": "tickLines(lines): 1-3 new lines weighted (INFO>DEBUG>WARN>ERROR>SYS 2.5%), cap 200; occasional WARN/ERROR burst",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "pure; newest-first"
+          ]
+        },
+        {
+          "id": "E7-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/logs.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E7-S2-T1",
+              "text": "LevelBadge: mono chip per level (SYS=cyan, INFO=slate, DEBUG=slate-500, WARN=amber, ERROR=rose)",
+              "status": "done"
+            },
+            {
+              "id": "E7-S2-T2",
+              "text": "LogTable: mono 12px rows ts | level | source | msg; hover bg; ERROR rows left-border rose",
+              "status": "done"
+            },
+            {
+              "id": "E7-S2-T3",
+              "text": "ToolbarRow: level chips with counts, source select, search input, pause/continue, clear",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "stateless props; scroll area max-h with scroll-thin"
+          ]
+        },
+        {
+          "id": "E7-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/logs/layout.tsx",
+            "app/logs/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E7-S3-T1",
+              "text": "layout.tsx metadata + default export",
+              "status": "done"
+            },
+            {
+              "id": "E7-S3-T2",
+              "text": "page.tsx: state {lines, level:'ALL'|Level, source:'all'|Src, q, paused, autoscroll:true}, 1.6s tick via activeRef; useEffect autoscroll on lines change (el.scrollTop = el.scrollHeight) gated by paused+filter stability",
+              "status": "done"
+            },
+            {
+              "id": "E7-S3-T3",
+              "text": "layout: header (STREAMING chip + rate lines/s counter) -> toolbar -> LogTable in full-height Panel",
+              "status": "done"
+            },
+            {
+              "id": "E7-S3-T4",
+              "text": "chrome.tsx: Logs href '/logs'",
+              "status": "done"
+            },
+            {
+              "id": "E7-S3-T5",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "filters + search compose (AND)",
+            "clear empties feed",
+            "pause stops growth"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E8-settings",
+      "title": "Settings",
+      "route": "/settings",
+      "nav": {
+        "group": "System",
+        "label": "Settings"
+      },
+      "summary": "Operator settings (client-only, non-persisted for demo): risk limits, execution defaults, notifications toggles, appearance accent, workspace — with dirty-state Save/Revert.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E8-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/settings.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E8-S1-T1",
+              "text": "SettingsState: {risk {maxPerTradePct, maxBookExposurePct, stopDistanceBps, killSwitchOn}, exec {defaultVenue, tif, reduceOnlyDefault, coalesceMs, slippageBpsCap}, notify {orders, signals, riskBreach, agentDecisions, dailyDigest, hours}, appearance {accent, density, compactTables}, workspace {defaultPage, locale, utcOffset}}",
+              "status": "done"
+            },
+            {
+              "id": "E8-S1-T2",
+              "text": "DEFAULTS + deepEqual helper + section copy/labels table",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "typed, pure"
+          ]
+        },
+        {
+          "id": "E8-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/settings.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E8-S2-T1",
+              "text": "Controls (local, no deps): Toggle, Range (value label), Segmented (options), TextInput, SelectText (styled native select)",
+              "status": "done"
+            },
+            {
+              "id": "E8-S2-T2",
+              "text": "SectionCard: title + description + rows (label / control / hint), 2-col responsive",
+              "status": "done"
+            },
+            {
+              "id": "E8-S2-T3",
+              "text": "RiskSection / ExecutionSection / NotificationsSection / AppearanceSection / WorkspaceSection built from SettingsState + onChange(patch)",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "controlled from page state only; stateless"
+          ]
+        },
+        {
+          "id": "E8-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/settings/layout.tsx",
+            "app/settings/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E8-S3-T1",
+              "text": "layout.tsx metadata + default export",
+              "status": "done"
+            },
+            {
+              "id": "E8-S3-T2",
+              "text": "page.tsx: state {current, saved}; dirty = !deepEqual; Save (saved=current, savedAgo 0), Revert (current=saved); no auto-tick",
+              "status": "done"
+            },
+            {
+              "id": "E8-S3-T3",
+              "text": "sticky action bar: dirty dot + 'Unsaved changes' + Save/Revert buttons",
+              "status": "done"
+            },
+            {
+              "id": "E8-S3-T4",
+              "text": "chrome.tsx: Settings href '/settings'",
+              "status": "done"
+            },
+            {
+              "id": "E8-S3-T5",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "toggling anything marks dirty; save/revert round-trip works"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E9-profile",
+      "title": "User Profile",
+      "route": "/profile",
+      "nav": {
+        "group": "topbar",
+        "label": "Operator chip (avatar in chrome.tsx TopBar)"
+      },
+      "summary": "Operator identity: profile card, API keys (mask + rotate + revoke), active sessions (revoke), recent audit activity, clearance/roles.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E9-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/profile.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E9-S1-T1",
+              "text": "Apikey {id, label, prefix 'xk_live_…', scopes[], lastUsedAgoSec, status 'active'|'revoked'}, Session {id, device, ip, region, current, activeAgoSec}, Activity {id, tsAgo, verb, target, actor}",
+              "status": "done"
+            },
+            {
+              "id": "E9-S1-T2",
+              "text": "seed(): 3-4 keys (2 active), 3 sessions (1 current), 10 activity rows covering orders/signals/settings changes",
+              "status": "done"
+            },
+            {
+              "id": "E9-S1-T3",
+              "text": "actions: rotateKey(keys,id) -> new random prefix + fresh lastUsed + activity entry; revokeKey(keys,id); revokeSession(sessions,id) (blocks current)",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "pure; activity entries newest-first"
+          ]
+        },
+        {
+          "id": "E9-S2",
+          "title": "UI components",
+          "status": "done",
+          "files": [
+            "components/profile.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E9-S2-T1",
+              "text": "IdentityCard: avatar, name, role chips (OPERATOR/ADMIN + risk clearance L3), id/email, member-since, 'This device' badge",
+              "status": "done"
+            },
+            {
+              "id": "E9-S2-T2",
+              "text": "KeysTable: mask + scopes Badges + last used + Rotate/Revoke (desktop row actions; revoked row muted)",
+              "status": "done"
+            },
+            {
+              "id": "E9-S2-T3",
+              "text": "SessionsList: device + ip + region + current chip + Revoke (disabled for current)",
+              "status": "done"
+            },
+            {
+              "id": "E9-S2-T4",
+              "text": "ActivityFeed: grouped rows verb→target with tone (order=accent, risk=amber, auth=rose, signal=emerald)",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "stateless props"
+          ]
+        },
+        {
+          "id": "E9-S3",
+          "title": "Page + nav + gate",
+          "status": "done",
+          "files": [
+            "app/profile/layout.tsx",
+            "app/profile/page.tsx",
+            "components/chrome.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E9-S3-T1",
+              "text": "layout.tsx metadata + default export",
+              "status": "done"
+            },
+            {
+              "id": "E9-S3-T2",
+              "text": "page.tsx: state {keys, sessions, activity}; actions append activity entries; no tick",
+              "status": "done"
+            },
+            {
+              "id": "E9-S3-T3",
+              "text": "layout: grid xl:12 (IdentityCard 4 / ActivityFeed 8) -> grid xl:12 (KeysTable 7 / Sessions 5)",
+              "status": "done"
+            },
+            {
+              "id": "E9-S3-T4",
+              "text": "chrome.tsx TopBar: operator chip wrapped in <Link href='/profile'> (keep existing look, make cursor-pointer + focus ring)",
+              "status": "done"
+            },
+            {
+              "id": "E9-S3-T5",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "rotate/revoke update table + feed",
+            "topbar avatar navigates to /profile"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E10-search",
+      "title": "Search (⌘K palette)",
+      "route": "global-overlay (no route)",
+      "nav": {
+        "group": "topbar",
+        "label": "Search input in chrome.tsx TopBar"
+      },
+      "summary": "Command-palette search: fuzzy index across pages, symbols, strategies, engines, venues; keyboard nav; opens via ⌘K / '/' and clicking the TopBar search box.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E10-S1",
+          "title": "Data layer",
+          "status": "done",
+          "files": [
+            "lib/search.ts"
+          ],
+          "subtasks": [
+            {
+              "id": "E10-S1-T1",
+              "text": "SearchHit: {id, kind: 'Page'|'Symbol'|'Strategy'|'Engine'|'Venue', title, subtitle, href?, keyword?}",
+              "status": "done"
+            },
+            {
+              "id": "E10-S1-T2",
+              "text": "INDEX built from: NAV hrefs (pages), market.ts symbols, STRATEGIES, ENGINES, venues — with keyword sets (aliases: 'btc','eth','sol','okx','bin','alpaca','arb','mom','mean','fnd…')",
+              "status": "done"
+            },
+            {
+              "id": "E10-S1-T3",
+              "text": "queryHits(q, max=12): token AND match over title+keywords (accent/space insensitive), empty q returns top 8 'Jump to' pages",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "pure; strict tsc clean"
+          ]
+        },
+        {
+          "id": "E10-S2",
+          "title": "Palette UI",
+          "status": "done",
+          "files": [
+            "components/search.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E10-S2-T1",
+              "text": "Palette component: fixed overlay (z-50), focus-trapped input (autoFocus), result list with active-index highlight, kind icon + subtitle, hint footer (↑↓ move, ↵ open, esc close)",
+              "status": "done"
+            },
+            {
+              "id": "E10-S2-T2",
+              "text": "keyboard: ArrowUp/Down wrap, Enter=go (router.push if href else no-op toast-less highlight), Escape=close; outside click closes",
+              "status": "done"
+            },
+            {
+              "id": "E10-S2-T3",
+              "text": "SearchContext/Provider (in components/framework.tsx or co-located): open()/close() via useSyncExternalStore or context + useReducer; global keydown listener for ⌘K / ⌃K and '/' (when not typing in input)",
+              "status": "done"
+            },
+            {
+              "id": "E10-S2-T4",
+              "text": "wire chrome.tsx TopBar: replace static input with button calling openSearch (keep ⌘K affordance); mobile: small ⌕ button",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "no third-party fuzzy lib; provider used from any page via ConsoleShell wrapper"
+          ]
+        },
+        {
+          "id": "E10-S3",
+          "title": "Integration + gate",
+          "status": "done",
+          "files": [
+            "components/framework.tsx",
+            "app/*/page.tsx (no changes if provider wraps children)"
+          ],
+          "subtasks": [
+            {
+              "id": "E10-S3-T1",
+              "text": "wrap ConsoleShell children in <SearchProvider><SearchPalette/></...> so the palette mounts on every page (incl '/', '/strategies', '/signals', '/orders')",
+              "status": "done"
+            },
+            {
+              "id": "E10-S3-T2",
+              "text": "smoke: ⌘K opens on dashboard + orders; typing 'eth' lists ETH hit; Enter on a Page hit navigates; Esc closes",
+              "status": "done"
+            },
+            {
+              "id": "E10-S3-T3",
+              "text": "VALIDATION GATE + flip to done",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "palette works on at least 3 different routes",
+            "no hydration warnings"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E11-final",
+      "title": "System-wide polish + final gate",
+      "route": "multiple",
+      "nav": {
+        "group": "n/a",
+        "label": "n/a"
+      },
+      "summary": "Cross-page polish, nav sweep, full validation.",
+      "status": "done",
+      "stories": [
+        {
+          "id": "E11-S1",
+          "title": "Nav sweep + cross links",
+          "status": "done",
+          "files": [
+            "components/chrome.tsx",
+            "app/*/page.tsx"
+          ],
+          "subtasks": [
+            {
+              "id": "E11-S1-T1",
+              "text": "every sidebar entry has an href; no route left as a plain button",
+              "status": "done"
+            },
+            {
+              "id": "E11-S1-T2",
+              "text": "footer note on each page with 1-2 related page Links (e.g. Positions → Orders, Signals; Backtests → Performance)",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "all 10 routes reachable from the sidebar or topbar in one click"
+          ]
+        },
+        {
+          "id": "E11-S2",
+          "title": "Final gate",
+          "status": "done",
+          "files": [],
+          "subtasks": [
+            {
+              "id": "E11-S2-T1",
+              "text": "full build + tsc + eslint clean across the whole app",
+              "status": "done"
+            },
+            {
+              "id": "E11-S2-T2",
+              "text": "curl every route → 200: / /strategies /signals /orders /positions /backtests /risk-lab /performance /ai-agent /exchanges /logs /settings /profile",
+              "status": "done"
+            },
+            {
+              "id": "E11-S2-T3",
+              "text": "flip meta.overallStatus = done and meta.updated",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "zero lint/type errors; every page renders its first paint without console hydration warnings (manual check on 3 routes)"
+          ]
+        }
+      ]
+    }
+  ],
+  "executionOrder": [
+    "E1-positions (uses existing market tickers; closest to Orders pattern)",
+    "E9-profile (static, easy, unblocks avatar nav)",
+    "E8-settings (static, unblocks nothing but cheap)",
+    "E6-exchanges (same live-tick pattern as Orders)",
+    "E7-logs (live-stream pattern)",
+    "E5-ai-agent (live-stream pattern)",
+    "E2-backtests (pure + light interactivity)",
+    "E3-risk-lab (pure + scenario interactions)",
+    "E4-performance (pure, charting-heavy)",
+    "E10-search (needs all routes to index)",
+    "E11-final (sweep + gate)",
+    "note: any epic can be executed in a single turn; each story is self-contained with its own validation gate before flipping to done."
+  ]
+}
